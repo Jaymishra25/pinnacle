@@ -1,0 +1,164 @@
+import re
+
+def parse_resume_text(resume_text):
+    """
+    Parses a given resume text to extract key information.
+    This is a simplified example using regex and basic keyword matching.
+    A real-world parser would use advanced NLP libraries and ML models.
+
+    Args:
+        resume_text (str): The raw text content of a resume.
+
+    Returns:
+        dict: A dictionary containing extracted information.
+    """
+    extracted_data = {
+        "name": None,
+        "email": None,
+        "phone": None,
+        "skills": [],
+        "education": [],
+        "experience": []
+    }
+
+    # --- 1. Basic Information Extraction using Regex ---
+
+    # Name: Simple regex, might need refinement for complex names/formats
+    # This pattern looks for a line that might be a name, often at the beginning.
+    # It's very basic and assumes name is on its own line, possibly capitalized.
+    name_match = re.search(r"^[A-Z][a-zA-Z\s.-]{3,}\n", resume_text)
+    if name_match:
+        extracted_data["name"] = name_match.group(0).strip()
+    else:
+        # Fallback: look for two or more capitalized words at the start
+        name_match_fallback = re.search(r"([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)", resume_text)
+        if name_match_fallback:
+            extracted_data["name"] = name_match_fallback.group(1).strip()
+
+
+    # Email: Standard email regex
+    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", resume_text)
+    if email_match:
+        extracted_data["email"] = email_match.group(0)
+
+    # Phone: Common phone number patterns (e.g., (123) 456-7890, 123-456-7890, 123.456.7890)
+    phone_match = re.search(r"(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})", resume_text)
+    if phone_match:
+        extracted_data["phone"] = phone_match.group(1)
+
+    # --- 2. Skills Extraction (Keyword Matching) ---
+    # In a real system, this would involve more sophisticated NER or classification.
+    # Define a list of common skills to look for
+    all_possible_skills = [
+        "Python", "Java", "C++", "JavaScript", "React", "Angular", "Vue.js",
+        "SQL", "NoSQL", "MongoDB", "PostgreSQL", "MySQL",
+        "AWS", "Azure", "Google Cloud", "Docker", "Kubernetes",
+        "Machine Learning", "Deep Learning", "NLP", "Computer Vision",
+        "Data Analysis", "Data Science", "Pandas", "NumPy", "Scikit-learn", "TensorFlow", "PyTorch",
+        "Agile", "Scrum", "Git", "Jira",
+        "Communication", "Leadership", "Teamwork", "Problem Solving", "Critical Thinking"
+    ]
+
+    # Convert resume text to lower case for case-insensitive matching
+    resume_text_lower = resume_text.lower()
+
+    for skill in all_possible_skills:
+        # Use word boundaries (\b) to match whole words
+        if re.search(r"\b" + re.escape(skill.lower()) + r"\b", resume_text_lower):
+            extracted_data["skills"].append(skill)
+    # Remove duplicates and sort for cleaner output
+    extracted_data["skills"] = sorted(list(set(extracted_data["skills"])))
+
+
+    # --- 3. Education Extraction (Simplified) ---
+    # This looks for lines containing common education keywords.
+    # A more robust solution would use patterns for degrees, universities, dates.
+    education_keywords = ["university", "college", "institute", "degree", "bachelor", "master", "phd"]
+    lines = resume_text.split('\n')
+    for line in lines:
+        if any(keyword in line.lower() for keyword in education_keywords):
+            # Simple heuristic: if it contains a year, it's likely education
+            if re.search(r"\b(19|20)\d{2}\b", line):
+                extracted_data["education"].append(line.strip())
+    # Remove duplicates
+    extracted_data["education"] = list(set(extracted_data["education"]))
+
+
+    # --- 4. Experience Extraction (Simplified) ---
+    # This looks for lines that might indicate a job title or company.
+    # A real parser would identify sections, then extract roles, companies, dates, and descriptions.
+    experience_indicators = ["experience", "work history", "employment", "job title", "company"]
+    current_section = None
+    for line in lines:
+        line_lower = line.lower()
+        if "experience" in line_lower or "work history" in line_lower or "employment" in line_lower:
+            current_section = "experience"
+            continue # Skip the section header itself
+        elif current_section == "experience":
+            # Heuristic: if a line is indented or looks like a job title/company
+            # This is very basic and will need significant improvement.
+            if line.strip() and not any(kw in line_lower for kw in education_keywords):
+                # Try to find a year range or "present" to confirm it's an experience line
+                if re.search(r"\b(19|20)\d{2}\s*[-–]\s*(?:(19|20)\d{2}|present)\b", line_lower) or \
+                   re.search(r"\b[JFMASOND][a-z]{2,8}\s+\d{4}\s*[-–]\s*(?:[JFMASOND][a-z]{2,8}\s+\d{4}|present)\b", line_lower):
+                    extracted_data["experience"].append(line.strip())
+                elif re.search(r"\b(manager|engineer|developer|analyst|specialist|director|lead)\b", line_lower):
+                     # If it contains a common job title, add it
+                     extracted_data["experience"].append(line.strip())
+            # Stop collecting experience if we hit another major section
+            if any(kw in line_lower for kw in ["education", "skills", "projects", "awards"]):
+                current_section = None
+
+    # Remove duplicates
+    extracted_data["experience"] = list(set(extracted_data["experience"]))
+
+    return extracted_data
+
+# --- Example Usage ---
+if __name__ == "__main__":
+    sample_resume_text = """
+John Doe
+johndoe@example.com
+(123) 456-7890
+LinkedIn: linkedin.com/in/johndoe
+
+Summary
+Highly motivated software engineer with 5 years of experience in Python and JavaScript development.
+
+Experience
+Senior Software Engineer | Tech Solutions Inc. | Jan 2022 - Present
+- Led development of scalable backend services using Python and Django.
+- Implemented RESTful APIs, improving system performance by 20%.
+- Mentored junior developers and conducted code reviews.
+
+Software Developer | Innovate Corp. | Jun 2019 - Dec 2021
+- Developed web applications using React and Node.js.
+- Contributed to database design (PostgreSQL) and optimization.
+- Collaborated with cross-functional teams in an Agile environment.
+
+Education
+Master of Science in Computer Science | State University | 2019
+Bachelor of Technology in Information Technology | City College | 2017
+
+Skills
+Programming Languages: Python, JavaScript, Java, C++
+Frameworks: Django, React, Node.js, Flask
+Databases: PostgreSQL, MongoDB, MySQL
+Cloud Platforms: AWS, Azure
+Tools: Git, Docker, Jira, Kubernetes
+Soft Skills: Problem Solving, Teamwork, Communication, Leadership, Critical Thinking
+"""
+
+    parsed_info = parse_resume_text(sample_resume_text)
+
+    print("--- Parsed Resume Information ---")
+    for key, value in parsed_info.items():
+        print(f"{key.replace('_', ' ').title()}: {value}")
+
+    print("\n--- Important Note ---")
+    print("This is a highly simplified example. A production-grade resume parser would:")
+    print("1. Use advanced NLP libraries (e.g., spaCy, NLTK) for robust entity recognition and text understanding.")
+    print("2. Employ Machine Learning models (e.g., CRF, Bi-LSTM, Transformers) trained on large datasets for higher accuracy.")
+    print("3. Handle various resume formats (PDF, DOCX) using libraries like PyPDF2, python-docx.")
+    print("4. Implement more sophisticated logic for parsing sections, dates, and quantifying achievements.")
+    print("5. Include error handling and edge case management.")
