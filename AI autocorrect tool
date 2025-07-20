@@ -1,0 +1,156 @@
+import collections
+import re
+
+class AutocorrectTool:
+    """
+    A basic AI-driven autocorrect tool for spelling correction.
+    This implementation uses edit distance (Levenshtein) and word frequency
+    to suggest corrections.
+    """
+
+    def __init__(self, corpus_text=None):
+        """
+        Initializes the autocorrect tool with a vocabulary and word frequencies.
+        Args:
+            corpus_text (str, optional): A large text corpus to build the
+                                         vocabulary and frequencies from.
+                                         If None, a default small vocabulary is used.
+        """
+        self.WORDS = collections.Counter(self._train(corpus_text))
+        self.N = sum(self.WORDS.values()) # Total number of words in corpus
+
+    def _train(self, text):
+        """
+        Trains the model by counting word occurrences in a text corpus.
+        Args:
+            text (str): The text corpus.
+        Returns:
+            list: A list of words from the corpus.
+        """
+        if text:
+            # Simple tokenization: convert to lowercase and find all alphabetic sequences
+            return re.findall(r'[a-z]+', text.lower())
+        else:
+            # Default small vocabulary for demonstration if no corpus is provided
+            print("Using a default small vocabulary. For better results, provide a large text corpus.")
+            return "this is a test sentence for the autocorrect tool test sentence".split()
+
+    def _words(self, text):
+        """Helper to tokenize text into words."""
+        return re.findall(r'[a-z]+', text.lower())
+
+    def _probability(self, word):
+        """
+        Calculates the probability of a word appearing in the corpus.
+        P(word) = count(word) / total_words
+        """
+        return self.WORDS[word] / self.N
+
+    def _edits1(self, word):
+        """
+        Generates all words that are one edit (insertion, deletion, substitution, transposition)
+        away from the given word.
+        """
+        letters = 'abcdefghijklmnopqrstuvwxyz'
+        splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
+        deletes = [L + R[1:] for L, R in splits if R]
+        transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R) > 1]
+        replaces = [L + c + R[1:] for L, R in splits if R for c in letters]
+        inserts = [L + c + R for L, R in splits for c in letters]
+        return set(deletes + transposes + replaces + inserts)
+
+    def _edits2(self, word):
+        """
+        Generates all words that are two edits away from the given word.
+        """
+        return {e2 for e1 in self._edits1(word) for e2 in self._edits1(e1)}
+
+    def _known(self, words):
+        """
+        Returns the subset of words that are present in the vocabulary.
+        """
+        return {w for w in words if w in self.WORDS}
+
+    def _candidates(self, word):
+        """
+        Generates candidate corrections for a given word.
+        Prioritizes known words with 0, 1, or 2 edits.
+        """
+        # Check if the word itself is known (perfect match)
+        # Then check words 1 edit away, then 2 edits away
+        # Fallback to the original word if no candidates found
+        return (self._known([word]) or
+                self._known(self._edits1(word)) or
+                self._known(self._edits2(word)) or
+                [word])
+
+    def correct_word(self, word):
+        """
+        Suggests the best correction for a single word.
+        Chooses the candidate with the highest probability.
+        """
+        # Get candidates and find the one with the highest probability
+        return max(self._candidates(word), key=self._probability)
+
+    def autocorrect_text(self, text):
+        """
+        Applies autocorrection to an entire block of text.
+        Corrects each word individually.
+        """
+        corrected_words = []
+        # Split text into words and non-word characters to preserve punctuation/spacing
+        # This regex splits by non-alphabetic characters, keeping them as separate tokens
+        tokens = re.findall(r'[a-zA-Z]+|[^a-zA-Z]+', text)
+
+        for token in tokens:
+            if re.match(r'[a-zA-Z]+', token): # If it's a word
+                corrected_words.append(self.correct_word(token.lower()))
+            else: # If it's punctuation or space
+                corrected_words.append(token)
+        return "".join(corrected_words)
+
+# --- Example Usage ---
+if __name__ == "__main__":
+    # A small corpus for demonstration.
+    # In a real application, you'd load a much larger text file (e.g., a book, Wikipedia dump).
+    sample_corpus = """
+    The quick brown fox jumps over the lazy dog.
+    This is a simple test for the autocorrection tool.
+    It should correct common misspellings like 'speling' to 'spelling'
+    and 'teh' to 'the'. We also want to see if it can handle
+    words that are two edits away, like 'appel' to 'apple'.
+    Communication is key for global understanding.
+    """
+
+    # Initialize the autocorrect tool with the sample corpus
+    print("Initializing autocorrect tool...")
+    autocorrect = AutocorrectTool(corpus_text=sample_corpus)
+    print("Tool initialized.")
+
+    # Test cases
+    test_sentences = [
+        "I lvoe progrmming in pyhton.",
+        "Teh qick brown fox.",
+        "This is a speling mistake.",
+        "Aple is a fruit.",
+        "Wher are you goinng?",
+        "Comunication is vital."
+    ]
+
+    print("\n--- Autocorrection Examples ---")
+    for sentence in test_sentences:
+        corrected_sentence = autocorrect.autocorrect_text(sentence)
+        print(f"Original:  '{sentence}'")
+        print(f"Corrected: '{corrected_sentence}'\n")
+
+    # Example of correcting a single word
+    print("\n--- Single Word Correction Example ---")
+    word_to_correct = "recieve"
+    corrected_word = autocorrect.correct_word(word_to_correct)
+    print(f"Original word: '{word_to_correct}'")
+    print(f"Corrected word: '{corrected_word}'")
+
+    word_to_correct_2 = "autocorrectin"
+    corrected_word_2 = autocorrect.correct_word(word_to_correct_2)
+    print(f"Original word: '{word_to_correct_2}'")
+    print(f"Corrected word: '{corrected_word_2}'")
